@@ -1,4 +1,4 @@
-def push(stack, jx, jy, jz, t, rj):
+def push(stack, jx, jy, jz, rj):
     """
     既存のベクトルと素かどうかをチェックしろ
 
@@ -12,26 +12,25 @@ def push(stack, jx, jy, jz, t, rj):
 
     nj = jx * jx + jy * jy + jz * jz
     for i in range(len(stack)):
-        ix, iy, iz, _, _ = stack[i]
+        ix, iy, iz, _ = stack[i]
         ni = ix * ix + iy * iy + iz * iz
         nij = ix * jx + iy * jy + iz * jz
         if nij * nij == ni * nj:
             if nj < ni:
-                stack[i] = jx, jy, jz, t, rj
+                stack[i] = jx, jy, jz, rj
             return
 
-    stack.append((jx, jy, jz, t, rj))
+    stack.append((jx, jy, jz, rj))
 
 
-def main():
-    bx, by, bz = 1.0, 1.0, 1.0
-    ix, iy, iz = 1, 1, 1
-    grid_range = 10
-    tolerance = 0.02
+def prime_vectors(ivec, cell, grid_range=10, tolerance=0.02):
+    bx, by, bz = cell
+    ix, iy, iz = ivec
+
     ri = (ix**2 + iy**2 + iz**2) ** 0.5
 
     stack = []
-
+    # find lattice points on the lattice which are perpendicular to vector a
     for jx in range(-grid_range, grid_range + 1):
         for jy in range(-grid_range, grid_range + 1):
             for jz in range(-grid_range, grid_range + 1):
@@ -40,22 +39,37 @@ def main():
                 rjz = jz * bz
                 rj = (rjx**2 + rjy**2 + rjz**2) ** 0.5
                 if rj != 0:
-                    tj = abs(ix * rjx + iy * rjy + iz * rjz) / (ri * rj)
-                    if tj < tolerance:
-                        push(stack, jx, jy, jz, tj, rj)
+                    cosine = abs(ix * rjx + iy * rjy + iz * rjz) / (ri * rj)
+                    if cosine < tolerance:
+                        push(stack, jx, jy, jz, rj)
+    return stack
 
-    for j in range(len(stack)):
-        xj, yj, zj, tj, rj = stack[j]
+
+def main():
+    # cell shape
+    bx, by, bz = 9.046782116679205, 7.8347431355469475, 7.386666666666667
+    # a-vector
+    # これも与える必要はなく、全自動で全部計算すれば良いのでは?
+    # たぶんGenIce2のunitcell.pyはそれをやっていた。
+    # もっとちゃんと調査すれば、重複を減らして、全数探査できると思う。
+    ix, iy, iz = 1, 1, 1
+    tolerance = 0.02
+
+    vectors = prime_vectors((ix, iy, iz), (bx, by, bz), tolerance=tolerance)
+
+    ri = (ix**2 + iy**2 + iz**2) ** 0.5
+    for j in range(len(vectors)):
+        xj, yj, zj, rj = vectors[j]
         rjx = xj * bx
         rjy = yj * by
         rjz = zj * bz
-        for k in range(j + 1, len(stack)):
-            xk, yk, zk, tk, rk = stack[k]
+        for k in range(j + 1, len(vectors)):
+            xk, yk, zk, rk = vectors[k]
             rkx = xk * bx
             rky = yk * by
             rkz = zk * bz
-            tjk = abs(rkx * rjx + rky * rjy + rkz * rjz) / (rk * rj)
-            if tjk < tolerance:
+            cosine = abs(rkx * rjx + rky * rjy + rkz * rjz) / (rk * rj)
+            if cosine < tolerance:
                 x = rky * rjz - rkz * rjy
                 y = rkz * rjx - rkx * rjz
                 z = rkx * rjy - rky * rjx

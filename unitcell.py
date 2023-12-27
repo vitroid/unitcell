@@ -1,4 +1,8 @@
-def push(stack, jx, jy, jz, rj):
+import numpy as np
+import sys
+
+
+def push(stack, jvec, jnorm):
     """
     既存のベクトルと素かどうかをチェックしろ
 
@@ -10,83 +14,69 @@ def push(stack, jx, jy, jz, rj):
       r: 長さ
     """
 
-    nj = jx * jx + jy * jy + jz * jz
+    nj = jvec @ jvec
     for i in range(len(stack)):
-        ix, iy, iz, _ = stack[i]
-        ni = ix * ix + iy * iy + iz * iz
-        nij = ix * jx + iy * jy + iz * jz
+        ivec, _ = stack[i]
+        ni = ivec @ ivec
+        nij = ivec @ jvec
         if nij * nij == ni * nj:
             if nj < ni:
-                stack[i] = jx, jy, jz, rj
+                stack[i] = jvec, jnorm
             return
 
-    stack.append((jx, jy, jz, rj))
+    stack.append((jvec, jnorm))
 
 
 def prime_vectors(ivec, cell, grid_range=10, tolerance=0.02):
-    bx, by, bz = cell
-    ix, iy, iz = ivec
-
-    ri = (ix**2 + iy**2 + iz**2) ** 0.5
+    inorm = np.linalg.norm(ivec)
 
     stack = []
     # find lattice points on the lattice which are perpendicular to vector a
     for jx in range(-grid_range, grid_range + 1):
         for jy in range(-grid_range, grid_range + 1):
             for jz in range(-grid_range, grid_range + 1):
-                rjx = jx * bx
-                rjy = jy * by
-                rjz = jz * bz
-                rj = (rjx**2 + rjy**2 + rjz**2) ** 0.5
-                if rj != 0:
-                    cosine = abs(ix * rjx + iy * rjy + iz * rjz) / (ri * rj)
+                jvec = np.array([jx, jy, jz])
+                rjvec = jvec @ cell
+                jnorm = np.linalg.norm(rjvec)
+                if jnorm != 0:
+                    cosine = abs(ivec @ rjvec) / (inorm * jnorm)
                     if cosine < tolerance:
-                        push(stack, jx, jy, jz, rj)
+                        push(stack, jvec, jnorm)
     return stack
 
 
-def main():
-    # cell shape
-    bx, by, bz = 9.046782116679205, 7.8347431355469475, 7.386666666666667
+def orthogonalize(cell, ivec=np.array([1, 1, 1])):
     # a-vector
     # これも与える必要はなく、全自動で全部計算すれば良いのでは?
     # たぶんGenIce2のunitcell.pyはそれをやっていた。
     # もっとちゃんと調査すれば、重複を減らして、全数探査できると思う。
-    ix, iy, iz = 1, 1, 1
     tolerance = 0.02
 
-    vectors = prime_vectors((ix, iy, iz), (bx, by, bz), tolerance=tolerance)
+    vectors = prime_vectors(ivec, cell, tolerance=tolerance)
 
-    ri = (ix**2 + iy**2 + iz**2) ** 0.5
+    rivec = ivec @ cell
+    inorm = np.linalg.norm(rivec)
     for j in range(len(vectors)):
-        xj, yj, zj, rj = vectors[j]
-        rjx = xj * bx
-        rjy = yj * by
-        rjz = zj * bz
+        jvec, jnorm = vectors[j]
+        rjvec = jvec @ cell
         for k in range(j + 1, len(vectors)):
-            xk, yk, zk, rk = vectors[k]
-            rkx = xk * bx
-            rky = yk * by
-            rkz = zk * bz
-            cosine = abs(rkx * rjx + rky * rjy + rkz * rjz) / (rk * rj)
+            kvec, knorm = vectors[k]
+            rkvec = kvec @ cell
+            cosine = abs(rkvec @ rjvec) / (knorm * jnorm)
             if cosine < tolerance:
-                x = rky * rjz - rkz * rjy
-                y = rkz * rjx - rkx * rjz
-                z = rkx * rjy - rky * rjx
-                v = abs(x * ix + y * iy + z * iz)
+                volume = abs(np.linalg.det([rivec, rjvec, rkvec]))
                 print(
-                    int(v / (bx * by * bz)),
-                    f"{v / (ri * rj * rk):.6f}",
-                    ix,
-                    iy,
-                    iz,
-                    xj,
-                    yj,
-                    zj,
-                    xk,
-                    yk,
-                    zk,
+                    int(volume / np.linalg.det(cell)),
+                    f"{volume/ (inorm * jnorm * knorm):.6f}",
+                    *ivec,
+                    *jvec,
+                    *kvec,
                 )
+
+
+def main():
+    cell = np.diag([float(x) for x in sys.argv[1:]])
+    orthogonalize(cell)
 
 
 if __name__ == "__main__":
